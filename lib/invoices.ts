@@ -5,6 +5,8 @@ export const defaultGuardrails: GuardrailConfig = {
   flag_new_vendors: true,
   flag_round_numbers: true,
   flag_duplicates: true,
+  flag_invoice_splitting: true,
+  flag_large_first_invoice: true,
   require_specter_check: true,
 }
 

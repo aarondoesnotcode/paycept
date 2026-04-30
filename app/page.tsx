@@ -20,6 +20,8 @@ const FLAG_LABELS: Record<string, string> = {
   round_number: 'Round number',
   duplicate: 'Duplicate',
   high_confidence_ok: 'All checks passed',
+  invoice_splitting: 'Possible splitting',
+  large_first_invoice: 'Large first invoice',
 }
 
 const FLAG_STYLES: Record<string, string> = {
@@ -28,6 +30,8 @@ const FLAG_STYLES: Record<string, string> = {
   round_number: 'bg-orange-500/10 text-orange-400 border border-orange-500/20',
   duplicate: 'bg-red-600/10 text-red-500 border border-red-600/20',
   high_confidence_ok: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20',
+  invoice_splitting: 'bg-rose-500/10 text-rose-400 border border-rose-500/20',
+  large_first_invoice: 'bg-amber-600/10 text-amber-500 border border-amber-600/20',
 }
 
 const RISK_STYLES: Record<string, string> = {
@@ -54,6 +58,8 @@ export default function Home() {
     flag_new_vendors: true,
     flag_round_numbers: true,
     flag_duplicates: true,
+    flag_invoice_splitting: true,
+    flag_large_first_invoice: true,
     require_specter_check: true,
   })
   const [localGuardrails, setLocalGuardrails] = useState<GuardrailConfig>({ ...guardrails })
@@ -417,7 +423,7 @@ export default function Home() {
                 />
                 <GuardrailToggle
                   label="Flag round numbers"
-                  description="Escalate suspiciously round amounts (multiples of £500 over £1k)"
+                  description="Soft signal — only adds weight when other risks fire (avoids flagging legit retainers)"
                   value={localGuardrails.flag_round_numbers}
                   onChange={v => setLocalGuardrails(g => ({ ...g, flag_round_numbers: v }))}
                 />
@@ -426,6 +432,18 @@ export default function Home() {
                   description="Escalate if same vendor and amount has been seen recently"
                   value={localGuardrails.flag_duplicates}
                   onChange={v => setLocalGuardrails(g => ({ ...g, flag_duplicates: v }))}
+                />
+                <GuardrailToggle
+                  label="Flag invoice splitting"
+                  description="Catch vendors submitting multiple sub-threshold invoices that sum over the limit"
+                  value={localGuardrails.flag_invoice_splitting}
+                  onChange={v => setLocalGuardrails(g => ({ ...g, flag_invoice_splitting: v }))}
+                />
+                <GuardrailToggle
+                  label="Flag large first invoices"
+                  description="Escalate when a brand-new vendor's debut invoice exceeds £1,000"
+                  value={localGuardrails.flag_large_first_invoice}
+                  onChange={v => setLocalGuardrails(g => ({ ...g, flag_large_first_invoice: v }))}
                 />
               </div>
 

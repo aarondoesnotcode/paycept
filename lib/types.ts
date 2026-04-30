@@ -1,6 +1,13 @@
 export type InvoiceStatus = 'pending' | 'processing' | 'auto_paid' | 'escalated' | 'approved' | 'rejected'
 
-export type InvoiceFlag = 'new_vendor' | 'above_threshold' | 'round_number' | 'duplicate' | 'high_confidence_ok'
+export type InvoiceFlag =
+  | 'new_vendor'
+  | 'above_threshold'
+  | 'round_number'
+  | 'duplicate'
+  | 'high_confidence_ok'
+  | 'invoice_splitting'
+  | 'large_first_invoice'
 
 export interface SpecterEnrichment {
   company_registered: boolean
@@ -31,6 +38,8 @@ export interface GuardrailConfig {
   flag_new_vendors: boolean
   flag_round_numbers: boolean
   flag_duplicates: boolean
+  flag_invoice_splitting: boolean
+  flag_large_first_invoice: boolean
   require_specter_check: boolean
 }
 
