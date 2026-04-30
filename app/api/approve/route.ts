@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { invoices, auditLog } from '@/lib/invoices'
+import { balance, startingBalance, transactions, debit } from '@/lib/treasury'
 
 export async function POST(req: NextRequest) {
   const { id } = await req.json()
@@ -9,6 +10,13 @@ export async function POST(req: NextRequest) {
   invoice.status = 'approved'
   invoice.decided_by = 'human'
   invoice.decided_at = new Date().toISOString()
+
+  debit({
+    vendor: invoice.vendor,
+    amount: invoice.amount,
+    reference: invoice.id,
+    initiated_by: 'human',
+  })
 
   auditLog.unshift({
     timestamp: new Date().toLocaleTimeString('en-GB'),
@@ -20,5 +28,5 @@ export async function POST(req: NextRequest) {
     reason: 'Manually approved by finance team.',
   })
 
-  return NextResponse.json({ invoices, auditLog })
+  return NextResponse.json({ invoices, auditLog, balance, startingBalance, transactions })
 }

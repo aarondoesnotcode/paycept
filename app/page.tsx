@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Invoice, AuditEntry, GuardrailConfig } from '@/lib/types'
+import { Invoice, AuditEntry, GuardrailConfig, TxEntry } from '@/lib/types'
+
+const DEFAULT_STARTING_BALANCE = 50_000
 
 const STATUS_STYLES: Record<string, { label: string; className: string }> = {
   pending: { label: 'Pending', className: 'bg-zinc-700 text-zinc-300' },
@@ -38,6 +40,15 @@ const RISK_STYLES: Record<string, string> = {
 export default function Home() {
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([])
+  const [balance, setBalance] = useState<number>(DEFAULT_STARTING_BALANCE)
+  const [startingBalance, setStartingBalance] = useState<number>(DEFAULT_STARTING_BALANCE)
+  const [transactions, setTransactions] = useState<TxEntry[]>([])
+  const [editingBalance, setEditingBalance] = useState(false)
+  const [balanceInput, setBalanceInput] = useState('')
+  const [balanceSaving, setBalanceSaving] = useState(false)
+  const [sliderMax, setSliderMax] = useState(2000)
+  const [editingSliderMax, setEditingSliderMax] = useState(false)
+  const [sliderMaxInput, setSliderMaxInput] = useState('')
   const [guardrails, setGuardrails] = useState<GuardrailConfig>({
     auto_pay_threshold: 500,
     flag_new_vendors: true,
@@ -51,14 +62,37 @@ export default function Home() {
   const [guardrailSaving, setGuardrailSaving] = useState(false)
   const [savedGuardrails, setSavedGuardrails] = useState(false)
 
+  function syncData(data: { invoices?: Invoice[]; auditLog?: AuditEntry[]; guardrails?: GuardrailConfig; balance?: number; startingBalance?: number; transactions?: TxEntry[] }) {
+    if (data.invoices) setInvoices(data.invoices)
+    if (data.auditLog) setAuditLog(data.auditLog)
+    if (data.guardrails) { setGuardrails(data.guardrails); setLocalGuardrails(data.guardrails) }
+    if (data.balance !== undefined) setBalance(data.balance)
+    if (data.startingBalance !== undefined) setStartingBalance(data.startingBalance)
+    if (data.transactions) setTransactions(data.transactions)
+  }
+
+  async function saveStartingBalance() {
+    const parsed = parseFloat(balanceInput.replace(/,/g, ''))
+    if (isNaN(parsed) || parsed < 0) return
+    setBalanceSaving(true)
+    try {
+      const res = await fetch('/api/treasury', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: parsed }),
+      })
+      syncData(await res.json())
+      setEditingBalance(false)
+    } finally {
+      setBalanceSaving(false)
+    }
+  }
+
   const fetchState = useCallback(async () => {
     const res = await fetch('/api/triage')
     const data = await res.json()
-    setInvoices(data.invoices)
-    setAuditLog(data.auditLog)
-    setGuardrails(data.guardrails)
-    setLocalGuardrails(data.guardrails)
-  }, [])
+    syncData(data)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchState()
@@ -68,9 +102,10 @@ export default function Home() {
     setTriageLoading(true)
     try {
       const res = await fetch('/api/triage', { method: 'POST' })
-      const data = await res.json()
-      setInvoices(data.invoices)
-      setAuditLog(data.auditLog)
+      if (!res.ok) { console.error('[triage]', res.status, await res.text()); return }
+      syncData(await res.json())
+    } catch (err) {
+      console.error('[triage] Fetch error', err)
     } finally {
       setTriageLoading(false)
     }
@@ -79,12 +114,7 @@ export default function Home() {
   async function handleReset() {
     setResetLoading(true)
     try {
-      const res = await fetch('/api/reset', { method: 'POST' })
-      const data = await res.json()
-      setInvoices(data.invoices)
-      setAuditLog(data.auditLog)
-      setGuardrails(data.guardrails)
-      setLocalGuardrails(data.guardrails)
+      syncData(await (await fetch('/api/reset', { method: 'POST' })).json())
     } finally {
       setResetLoading(false)
     }
@@ -96,9 +126,7 @@ export default function Home() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id }),
     })
-    const data = await res.json()
-    setInvoices(data.invoices)
-    setAuditLog(data.auditLog)
+    syncData(await res.json())
   }
 
   async function handleReject(id: string) {
@@ -107,9 +135,7 @@ export default function Home() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id }),
     })
-    const data = await res.json()
-    setInvoices(data.invoices)
-    setAuditLog(data.auditLog)
+    syncData(await res.json())
   }
 
   async function saveGuardrails() {
@@ -154,13 +180,22 @@ export default function Home() {
               </svg>
             </div>
             <div>
-              <span className="text-sm font-semibold text-zinc-100 tracking-tight">Briefcase</span>
+              <span className="text-sm font-semibold text-zinc-100 tracking-tight">Paycept</span>
               <span className="text-zinc-600 mx-2">/</span>
-              <span className="text-sm text-zinc-400">Invoice Triage</span>
             </div>
           </div>
 
           <div className="flex items-center gap-6">
+            {/* Live balance */}
+            <div className="hidden md:flex flex-col items-end">
+              <span className={`font-mono font-bold text-base leading-none transition-colors ${balance < 10_000 ? 'text-red-400' : 'text-white'}`}>
+                £{balance.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
+              </span>
+              <span className="text-zinc-600 text-xs mt-0.5">
+                of £{startingBalance.toLocaleString('en-GB')} starting
+              </span>
+            </div>
+            <div className="w-px h-6 bg-zinc-800 hidden md:block" />
             {/* Status summary */}
             <div className="hidden sm:flex items-center gap-4 font-mono text-xs">
               <span className="text-emerald-400">{counts.auto_paid} auto-paid</span>
@@ -245,9 +280,9 @@ export default function Home() {
                 <input
                   type="range"
                   min={0}
-                  max={2000}
-                  step={50}
-                  value={localGuardrails.auto_pay_threshold}
+                  max={sliderMax}
+                  step={Math.max(1, Math.floor(sliderMax / 40))}
+                  value={Math.min(localGuardrails.auto_pay_threshold, sliderMax)}
                   onChange={e =>
                     setLocalGuardrails(g => ({ ...g, auto_pay_threshold: Number(e.target.value) }))
                   }
@@ -255,7 +290,41 @@ export default function Home() {
                 />
                 <div className="flex justify-between text-zinc-600 text-xs mt-1 font-mono">
                   <span>£0</span>
-                  <span>£2,000</span>
+                  {editingSliderMax ? (
+                    <span className="flex items-center gap-1">
+                      <span>£</span>
+                      <input
+                        type="number"
+                        min={100}
+                        value={sliderMaxInput}
+                        onChange={e => setSliderMaxInput(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            const v = parseInt(sliderMaxInput)
+                            if (!isNaN(v) && v >= 100) setSliderMax(v)
+                            setEditingSliderMax(false)
+                          }
+                          if (e.key === 'Escape') setEditingSliderMax(false)
+                        }}
+                        onBlur={() => {
+                          const v = parseInt(sliderMaxInput)
+                          if (!isNaN(v) && v >= 100) setSliderMax(v)
+                          setEditingSliderMax(false)
+                        }}
+                        autoFocus
+                        className="w-20 bg-zinc-800 border border-zinc-600 rounded px-1.5 py-0.5 text-xs font-mono text-white focus:outline-none focus:border-zinc-400"
+                      />
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => { setSliderMaxInput(sliderMax.toString()); setEditingSliderMax(true) }}
+                      className="text-zinc-600 hover:text-zinc-300 transition-colors group"
+                      title="Click to change max"
+                    >
+                      £{sliderMax.toLocaleString()}
+                      <span className="ml-1 text-zinc-700 group-hover:text-zinc-500 transition-colors">✎</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -295,13 +364,90 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Treasury panel */}
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 overflow-hidden">
+            <div className="px-5 py-4 border-b border-zinc-800">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-semibold text-zinc-100">Treasury</h2>
+                  <p className="text-xs text-zinc-500 mt-0.5">Live payment ledger</p>
+                </div>
+                <div className="text-right">
+                  <div className={`font-mono font-bold text-base leading-none ${balance < startingBalance * 0.2 ? 'text-red-400' : 'text-emerald-400'}`}>
+                    £{balance.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
+                  </div>
+                  <div className="text-zinc-600 text-xs mt-0.5 font-mono">
+                    −£{(startingBalance - balance).toLocaleString('en-GB', { minimumFractionDigits: 2 })} paid out
+                  </div>
+                </div>
+              </div>
+
+              {/* Starting balance editor */}
+              <div className="mt-3 pt-3 border-t border-zinc-800/60">
+                {editingBalance ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-zinc-500 text-xs font-mono">£</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1000}
+                      value={balanceInput}
+                      onChange={e => setBalanceInput(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') saveStartingBalance()
+                        if (e.key === 'Escape') setEditingBalance(false)
+                      }}
+                      placeholder={startingBalance.toString()}
+                      autoFocus
+                      className="flex-1 bg-zinc-800 border border-zinc-600 rounded-md px-2 py-1 text-xs font-mono text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-400"
+                    />
+                    <button
+                      onClick={saveStartingBalance}
+                      disabled={balanceSaving}
+                      className="px-2.5 py-1 text-xs font-semibold bg-white text-zinc-900 rounded-md hover:bg-zinc-200 disabled:opacity-50 transition-colors"
+                    >
+                      {balanceSaving ? '…' : 'Set'}
+                    </button>
+                    <button
+                      onClick={() => setEditingBalance(false)}
+                      className="px-2 py-1 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { setBalanceInput(startingBalance.toString()); setEditingBalance(true) }}
+                    className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors group"
+                  >
+                    <span className="font-mono">Starting: £{startingBalance.toLocaleString('en-GB')}</span>
+                    <span className="text-zinc-700 group-hover:text-zinc-400 transition-colors">· Edit</span>
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="overflow-y-auto max-h-52">
+              {transactions.length === 0 ? (
+                <div className="px-5 py-6 text-center text-zinc-600 text-xs">
+                  No payments yet.
+                </div>
+              ) : (
+                <div className="divide-y divide-zinc-800/60">
+                  {transactions.map(tx => (
+                    <TxRow key={tx.id} tx={tx} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Audit log */}
           <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 overflow-hidden">
             <div className="px-5 py-4 border-b border-zinc-800">
               <h2 className="text-sm font-semibold text-zinc-100">Audit log</h2>
               <p className="text-xs text-zinc-500 mt-0.5">Every decision, immutable</p>
             </div>
-            <div className="overflow-y-auto max-h-80">
+            <div className="overflow-y-auto max-h-64">
               {auditLog.length === 0 ? (
                 <div className="px-5 py-8 text-center text-zinc-600 text-xs">
                   No decisions yet. Run triage to begin.
@@ -454,6 +600,36 @@ function GuardrailToggle({
       <div>
         <div className="text-xs font-medium text-zinc-200">{label}</div>
         <div className="text-xs text-zinc-500 mt-0.5">{description}</div>
+      </div>
+    </div>
+  )
+}
+
+function TxRow({ tx }: { tx: TxEntry }) {
+  return (
+    <div className="px-5 py-3 hover:bg-zinc-800/30 transition-colors">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-zinc-300 truncate">{tx.vendor}</span>
+            <span className={`text-xs px-1.5 py-0.5 rounded font-mono ${tx.initiated_by === 'agent' ? 'bg-blue-500/10 text-blue-400' : 'bg-teal-500/10 text-teal-400'}`}>
+              {tx.initiated_by}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="font-mono text-xs text-zinc-600">{tx.id}</span>
+            <span className="text-zinc-700">·</span>
+            <span className="font-mono text-xs text-zinc-600">{tx.timestamp}</span>
+          </div>
+        </div>
+        <div className="text-right shrink-0">
+          <div className="font-mono text-sm text-red-400 font-semibold">
+            −£{tx.amount.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
+          </div>
+          <div className="font-mono text-xs text-zinc-500 mt-0.5">
+            £{tx.balance_after.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
+          </div>
+        </div>
       </div>
     </div>
   )

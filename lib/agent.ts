@@ -1,26 +1,28 @@
-import Anthropic from '@anthropic-ai/sdk'
 import { Invoice, GuardrailConfig, TriageDecision, InvoiceFlag } from './types'
 import { invoices } from './invoices'
-
-const client = new Anthropic()
 
 export async function triageInvoice(
   invoice: Invoice,
   config: GuardrailConfig
 ): Promise<TriageDecision> {
   const flags: InvoiceFlag[] = []
+  const reasons: string[] = []
 
-  // Pre-flight guardrail checks — rules-based, no LLM needed
+  // --- Guardrail checks ---
+
   if (config.flag_new_vendors && invoice.is_new_vendor) {
     flags.push('new_vendor')
+    reasons.push('first invoice from this vendor — requires manual verification')
   }
 
   if (invoice.amount > config.auto_pay_threshold) {
     flags.push('above_threshold')
+    reasons.push(`amount £${invoice.amount.toFixed(2)} exceeds auto-pay limit of £${config.auto_pay_threshold}`)
   }
 
   if (config.flag_round_numbers && invoice.amount % 500 === 0 && invoice.amount >= 1000) {
     flags.push('round_number')
+    reasons.push('suspiciously round amount — possible test or fraudulent transaction')
   }
 
   if (config.flag_duplicates) {
@@ -31,76 +33,59 @@ export async function triageInvoice(
         i.amount === invoice.amount &&
         i.status !== 'rejected'
     )
-    if (duplicate) flags.push('duplicate')
+    if (duplicate) {
+      flags.push('duplicate')
+      reasons.push('duplicate detected — same vendor and amount seen recently')
+    }
   }
 
-  // Hard escalate if any flags triggered — no API call needed
-  if (flags.length > 0) {
-    const flagDescriptions: Record<InvoiceFlag, string> = {
-      new_vendor: 'first invoice from this vendor — requires manual verification',
-      above_threshold: `amount £${invoice.amount.toFixed(2)} exceeds auto-pay limit of £${config.auto_pay_threshold}`,
-      round_number: 'suspiciously round amount — possible test or fraudulent transaction',
-      duplicate: 'duplicate detected — same vendor and amount seen recently',
-      high_confidence_ok: 'all checks passed',
+  // --- Specter risk check ---
+  if (invoice.specter) {
+    if (invoice.specter.risk_score === 'high') {
+      reasons.push('Specter flags this vendor as high risk')
+      // Escalate even if no other flags triggered
+      return {
+        action: 'escalate',
+        reason: `Escalated: ${reasons.join('; ')}.`,
+        confidence: 0.97,
+        flags,
+      }
     }
-    const reasons = flags.map(f => flagDescriptions[f]).join('; ')
+    if (invoice.specter.risk_score === 'unknown' && flags.length === 0) {
+      reasons.push('Specter has no data on this vendor')
+      flags.push('new_vendor')
+      return {
+        action: 'escalate',
+        reason: `Escalated: ${reasons.join('; ')}.`,
+        confidence: 0.85,
+        flags,
+      }
+    }
+  }
+
+  // Hard escalate if guardrail flags triggered
+  if (flags.length > 0) {
     return {
       action: 'escalate',
-      reason: `Escalated: ${reasons}.`,
-      confidence: 0.95,
+      reason: `Escalated: ${reasons.join('; ')}.`,
+      confidence: reasons.length > 1 ? 0.97 : 0.90,
       flags,
     }
   }
 
-  // Only call Claude for clean, borderline invoices
-  const systemPrompt = `You are an invoice triage agent for a UK business. Your job is to decide whether an invoice should be auto-paid or escalated to a human for review.
+  // --- Auto-pay: all checks passed ---
+  const specterBoost = invoice.specter?.risk_score === 'low' ? 0.02 : 0
+  const historyBoost = invoice.prior_payments > 10 ? 0.02 : 0
+  const confidence = Math.min(0.97, 0.90 + specterBoost + historyBoost)
 
-You will receive an invoice with vendor details, amount, payment history, and optional Specter enrichment data about the vendor.
+  const specterNote = invoice.specter?.risk_score === 'low'
+    ? ` Specter confirms low risk.`
+    : ''
 
-Respond ONLY with valid JSON matching this exact schema:
-{
-  "action": "auto_pay" | "escalate",
-  "reason": "one clear sentence explaining the decision",
-  "confidence": 0.0 to 1.0
-}
-
-Rules:
-- auto_pay only if: known vendor, normal amount, no anomalies, confidence > 0.85
-- escalate if: any doubt, unusual pattern, or missing vendor information
-- Be conservative. When in doubt, escalate.
-- Keep reason short and plain — a non-technical finance manager will read it.`
-
-  const userMessage = `Invoice to triage:
-Vendor: ${invoice.vendor}
-Amount: £${invoice.amount.toFixed(2)}
-Account: ${invoice.account_ref}
-New vendor: ${invoice.is_new_vendor}
-Prior payments to this vendor: ${invoice.prior_payments}
-${invoice.specter ? `Specter data: ${JSON.stringify(invoice.specter)}` : 'No Specter enrichment available.'}`
-
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 256,
-    system: systemPrompt,
-    messages: [{ role: 'user', content: userMessage }],
-  })
-
-  const text = response.content[0].type === 'text' ? response.content[0].text : ''
-
-  try {
-    const parsed = JSON.parse(text.replace(/```json|```/g, '').trim())
-    return {
-      action: parsed.action,
-      reason: parsed.reason,
-      confidence: parsed.confidence,
-      flags: parsed.action === 'auto_pay' ? ['high_confidence_ok'] : [],
-    }
-  } catch {
-    return {
-      action: 'escalate',
-      reason: 'Could not parse agent response — escalating as precaution.',
-      confidence: 0.5,
-      flags: [],
-    }
+  return {
+    action: 'auto_pay',
+    reason: `Known vendor with ${invoice.prior_payments} prior payments, within auto-pay limit.${specterNote}`,
+    confidence,
+    flags: ['high_confidence_ok'],
   }
 }

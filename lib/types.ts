@@ -50,3 +50,14 @@ export interface AuditEntry {
   decided_by: 'agent' | 'human'
   reason: string
 }
+
+export interface TxEntry {
+  id: string
+  timestamp: string
+  vendor: string
+  amount: number
+  type: 'debit' | 'credit'
+  reference: string
+  balance_after: number
+  initiated_by: 'agent' | 'human'
+}
