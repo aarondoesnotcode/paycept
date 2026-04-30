@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Invoice, AuditEntry, GuardrailConfig, TxEntry } from '@/lib/types'
 
 const DEFAULT_STARTING_BALANCE = 50_000
@@ -179,10 +179,7 @@ export default function Home() {
                 <rect x="14" y="12" width="7" height="9" rx="1" fill="currentColor" />
               </svg>
             </div>
-            <div>
-              <span className="text-sm font-semibold text-zinc-100 tracking-tight">Paycept</span>
-              <span className="text-zinc-600 mx-2">/</span>
-            </div>
+            <span className="text-sm font-semibold text-zinc-100 tracking-tight">Paycept</span>
           </div>
 
           <div className="flex items-center gap-6">
@@ -234,10 +231,83 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="max-w-screen-xl mx-auto px-6 py-6 grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6">
+      {/* Hero */}
+      <section className="border-b border-zinc-800/60">
+        <div className="max-w-screen-xl mx-auto px-6 py-14 grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
+          <div>
+            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 mb-5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-xs text-zinc-400 font-medium tracking-wide">Autonomous AP agent</span>
+            </div>
+
+            <h1 className="text-4xl md:text-5xl font-bold tracking-tight leading-[1.05] mb-5">
+              Pay your invoices.
+              <br />
+              <span className="text-zinc-500">Without paying attention.</span>
+            </h1>
+
+            <p className="text-zinc-400 text-base leading-relaxed mb-7 max-w-xl">
+              Paycept intercepts every invoice before it leaves your account.
+              An AI agent runs the same checks a finance manager would —
+              vendor verification, amount limits, duplicate detection — and
+              auto-pays the safe ones in seconds. The risky <span className="text-zinc-200">5%</span> get
+              flagged for human review with a full audit trail.
+            </p>
+
+            <div className="grid grid-cols-3 gap-4 mb-2 max-w-md">
+              <Stat label="auto-paid" value="80%" tone="emerald" />
+              <Stat label="time saved" value="12h/wk" tone="white" />
+              <Stat label="errors prevented" value="100%" tone="amber" />
+            </div>
+            <p className="text-[10px] text-zinc-600 italic mb-7 max-w-md">
+              Illustrative figures for demo purposes — not real statistics.
+            </p>
+
+            <div className="flex items-center gap-3">
+              <a
+                href="#dashboard"
+                className="px-4 py-2 text-xs font-semibold rounded-md bg-white text-zinc-900 hover:bg-zinc-200 transition-colors shadow-[0_0_30px_rgba(255,255,255,0.1)]"
+              >
+                See it live ↓
+              </a>
+              <a
+                href="#how"
+                className="px-4 py-2 text-xs font-semibold rounded-md text-zinc-300 border border-zinc-800 hover:bg-zinc-900 transition-colors"
+              >
+                How it works
+              </a>
+            </div>
+          </div>
+
+          <div className="relative">
+            <AgentDiagram />
+          </div>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section id="how" className="border-b border-zinc-800/60">
+        <div className="max-w-screen-xl mx-auto px-6 py-12">
+          <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-6">How it works</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <HowCard num="01" title="Intercept" body="Every incoming invoice lands in Paycept's queue. Nothing leaves your account until the agent has reviewed it." />
+            <HowCard num="02" title="Triage" body="The agent runs your guardrails — threshold limits, vendor history, duplicate detection, Specter risk score — in milliseconds." />
+            <HowCard num="03" title="Act" body="Safe invoices auto-pay and debit your treasury immediately. Anything ambiguous is escalated to your team with a clear reason." />
+          </div>
+        </div>
+      </section>
+
+      <div id="dashboard" className="max-w-screen-xl mx-auto px-6 py-10 grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6">
+        <div className="lg:col-span-2 -mb-2">
+          <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">Live dashboard</h2>
+          <p className="text-zinc-600 text-xs mt-1">Upload a CSV, PDF, or image to add invoices to the queue</p>
+        </div>
+
         {/* Left column — invoice queue */}
         <div>
-          <div className="flex items-center justify-between mb-4">
+          <UploadDropzone onUploaded={syncData} />
+
+          <div className="flex items-center justify-between mb-4 mt-6">
             <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">
               Invoice Queue
             </h2>
@@ -245,14 +315,23 @@ export default function Home() {
           </div>
 
           <div className="space-y-3">
-            {invoices.map(invoice => (
-              <InvoiceCard
-                key={invoice.id}
-                invoice={invoice}
-                onApprove={handleApprove}
-                onReject={handleReject}
-              />
-            ))}
+            {invoices.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-zinc-800 bg-zinc-900/20 px-5 py-10 text-center">
+                <p className="text-sm text-zinc-400 font-medium">Queue is empty</p>
+                <p className="text-xs text-zinc-600 mt-1">
+                  Drop a CSV, PDF, or image above to add invoices.
+                </p>
+              </div>
+            ) : (
+              invoices.map(invoice => (
+                <InvoiceCard
+                  key={invoice.id}
+                  invoice={invoice}
+                  onApprove={handleApprove}
+                  onReject={handleReject}
+                />
+              ))
+            )}
           </div>
         </div>
 
@@ -659,6 +738,252 @@ function AuditRow({ entry }: { entry: AuditEntry }) {
         </span>
       </div>
       <p className="text-xs text-zinc-600 mt-0.5 leading-relaxed">{entry.reason}</p>
+    </div>
+  )
+}
+
+function Stat({ label, value, tone }: { label: string; value: string; tone: 'emerald' | 'white' | 'amber' }) {
+  const toneClass = tone === 'emerald' ? 'text-emerald-400' : tone === 'amber' ? 'text-amber-400' : 'text-white'
+  return (
+    <div>
+      <div className={`text-2xl font-bold tracking-tight ${toneClass}`}>{value}</div>
+      <div className="text-xs text-zinc-500 mt-0.5">{label}</div>
+    </div>
+  )
+}
+
+function HowCard({ num, title, body }: { num: string; title: string; body: string }) {
+  return (
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 hover:border-zinc-700 transition-colors">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="font-mono text-xs text-zinc-600">{num}</span>
+        <span className="h-px flex-1 bg-zinc-800" />
+      </div>
+      <h3 className="text-sm font-semibold text-zinc-100 mb-1.5">{title}</h3>
+      <p className="text-xs text-zinc-400 leading-relaxed">{body}</p>
+    </div>
+  )
+}
+
+function AgentDiagram() {
+  return (
+    <div className="relative rounded-2xl border border-zinc-800 bg-gradient-to-br from-zinc-900/80 via-zinc-950 to-zinc-900/40 p-6 shadow-[0_0_60px_rgba(0,0,0,0.4)] overflow-hidden">
+      <div className="absolute -top-20 -right-20 w-64 h-64 bg-emerald-500/5 blur-3xl rounded-full pointer-events-none" />
+      <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-blue-500/5 blur-3xl rounded-full pointer-events-none" />
+
+      <div className="relative">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center">
+            <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4 text-zinc-400">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="2" />
+              <path d="M14 2v6h6M9 13h6M9 17h6" stroke="currentColor" strokeWidth="2" />
+            </svg>
+          </div>
+          <div className="flex-1">
+            <div className="text-xs text-zinc-300 font-medium">Invoice received</div>
+            <div className="text-xs text-zinc-600 font-mono">Stripe Inc · £4,820.00</div>
+          </div>
+          <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 font-mono">in</span>
+        </div>
+
+        <div className="ml-4 my-1 h-4 w-px bg-gradient-to-b from-zinc-700 to-zinc-800" />
+
+        <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-4 mb-1">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+            <span className="text-xs font-semibold text-zinc-200">Paycept Agent</span>
+            <span className="ml-auto text-[10px] font-mono text-zinc-600">running</span>
+          </div>
+          <div className="space-y-1.5">
+            <Check ok label="Vendor known" detail="12 prior payments" />
+            <Check ok label="Specter: low risk" detail="registered company" />
+            <Check warn label="Above £500 threshold" detail="needs review" />
+            <Check ok label="Not a duplicate" detail="unique reference" />
+          </div>
+        </div>
+
+        <div className="ml-4 my-1 h-4 w-px bg-gradient-to-b from-zinc-700 to-zinc-800" />
+
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.04] p-3">
+            <div className="flex items-center gap-1.5 mb-1">
+              <span className="text-emerald-400 text-sm leading-none">✓</span>
+              <span className="text-xs font-semibold text-emerald-400">Auto-paid</span>
+            </div>
+            <div className="text-[10px] text-zinc-500">debit £4,820 → Stripe</div>
+          </div>
+          <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.04] p-3">
+            <div className="flex items-center gap-1.5 mb-1">
+              <span className="text-amber-400 text-sm leading-none">⚠</span>
+              <span className="text-xs font-semibold text-amber-400">Escalated</span>
+            </div>
+            <div className="text-[10px] text-zinc-500">awaiting human review</div>
+          </div>
+        </div>
+
+        <div className="mt-4 pt-4 border-t border-zinc-800 flex items-center justify-between text-[10px] font-mono text-zinc-600">
+          <span>guardrails: threshold, new-vendor, dupe, specter</span>
+          <span className="text-emerald-500">ledger updated</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Check({ ok, warn, label, detail }: { ok?: boolean; warn?: boolean; label: string; detail: string }) {
+  const symbol = warn ? '!' : ok ? '✓' : '·'
+  const colorClass = warn ? 'text-amber-400 border-amber-500/30' : 'text-emerald-400 border-emerald-500/30'
+  return (
+    <div className="flex items-center gap-2">
+      <span className={`w-4 h-4 rounded-full border ${colorClass} flex items-center justify-center text-[9px] font-bold leading-none`}>
+        {symbol}
+      </span>
+      <span className="text-xs text-zinc-300">{label}</span>
+      <span className="ml-auto text-[10px] text-zinc-600 font-mono">{detail}</span>
+    </div>
+  )
+}
+
+function UploadDropzone({
+  onUploaded,
+}: {
+  onUploaded: (data: { invoices?: Invoice[]; auditLog?: AuditEntry[] }) => void
+}) {
+  const [dragging, setDragging] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
+
+  function fileToBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        const result = reader.result as string
+        resolve(result.split(',')[1] || '')
+      }
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+  }
+
+  function fileToText(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve((reader.result as string) || '')
+      reader.onerror = reject
+      reader.readAsText(file)
+    })
+  }
+
+  async function handleFiles(files: FileList | File[]) {
+    setUploading(true)
+    setMessage(null)
+    let totalCreated = 0
+    const errors: string[] = []
+
+    for (const file of Array.from(files)) {
+      const isCsv = file.name.toLowerCase().endsWith('.csv') || file.type === 'text/csv'
+      try {
+        const payload: Record<string, string> = {
+          fileName: file.name,
+          mimeType: file.type || (isCsv ? 'text/csv' : 'application/octet-stream'),
+        }
+        if (isCsv) {
+          payload.text = await fileToText(file)
+        } else {
+          payload.base64Data = await fileToBase64(file)
+        }
+
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          errors.push(`${file.name}: ${data.error || 'failed'}`)
+          continue
+        }
+        totalCreated += (data.created || []).length
+        onUploaded(data)
+      } catch (err) {
+        errors.push(`${file.name}: ${err instanceof Error ? err.message : 'failed'}`)
+      }
+    }
+
+    setUploading(false)
+    if (errors.length > 0) {
+      setMessage({ type: 'error', text: errors.join(' · ') })
+    } else if (totalCreated > 0) {
+      setMessage({ type: 'success', text: `Added ${totalCreated} invoice${totalCreated === 1 ? '' : 's'} to the queue` })
+      setTimeout(() => setMessage(null), 4000)
+    }
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">Add invoices</h2>
+        <span className="text-xs text-zinc-600">PDF · image · CSV</span>
+      </div>
+
+      <div
+        onDragOver={e => { e.preventDefault(); setDragging(true) }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={e => {
+          e.preventDefault()
+          setDragging(false)
+          if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files)
+        }}
+        onClick={() => inputRef.current?.click()}
+        className={`relative rounded-xl border-2 border-dashed cursor-pointer transition-colors px-5 py-6
+          ${dragging ? 'border-zinc-400 bg-zinc-800/50' : 'border-zinc-800 bg-zinc-900/30 hover:border-zinc-600 hover:bg-zinc-900/60'}`}
+      >
+        <input
+          ref={inputRef}
+          type="file"
+          accept=".pdf,.csv,image/*"
+          multiple
+          className="hidden"
+          onChange={e => {
+            if (e.target.files && e.target.files.length > 0) handleFiles(e.target.files)
+            e.target.value = ''
+          }}
+        />
+
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0">
+            {uploading ? (
+              <span className="inline-block w-4 h-4 border-2 border-zinc-600 border-t-zinc-200 rounded-full animate-spin" />
+            ) : (
+              <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5 text-zinc-400">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium text-zinc-200">
+              {uploading ? 'Extracting…' : 'Drop a file, or click to browse'}
+            </div>
+            <div className="text-xs text-zinc-500 mt-0.5">
+              CSV parses instantly · PDFs / images use Claude Vision · adds invoices straight into the queue
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {message && (
+        <div
+          className={`mt-2 text-xs px-3 py-2 rounded-md border ${
+            message.type === 'success'
+              ? 'bg-emerald-950/40 border-emerald-800/40 text-emerald-400'
+              : 'bg-red-950/40 border-red-800/40 text-red-400'
+          }`}
+        >
+          {message.type === 'success' ? '✓ ' : '✗ '}
+          {message.text}
+        </div>
+      )}
     </div>
   )
 }

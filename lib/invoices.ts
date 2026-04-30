@@ -71,11 +71,43 @@ export const sampleInvoices: Invoice[] = [
   },
 ]
 
-export let invoices: Invoice[] = [...sampleInvoices.map(i => ({ ...i }))]
+export let invoices: Invoice[] = []
 export let auditLog: AuditEntry[] = []
 export let guardrails: GuardrailConfig = { ...defaultGuardrails }
 
 export function resetInvoices() {
-  invoices = [...sampleInvoices.map(i => ({ ...i }))]
+  invoices = []
   auditLog = []
+  invoiceCounter = 0
+}
+
+let invoiceCounter = 0
+
+export function addInvoices(newInvoices: Partial<Invoice>[]): Invoice[] {
+  const created: Invoice[] = []
+
+  for (const partial of newInvoices) {
+    invoiceCounter++
+    const vendor = (partial.vendor || 'Unknown vendor').trim()
+    const isNew = !invoices.some(i => i.vendor.toLowerCase() === vendor.toLowerCase())
+    const priorPayments = invoices.filter(i => i.vendor.toLowerCase() === vendor.toLowerCase()).length
+
+    const invoice: Invoice = {
+      id: partial.id || `inv_${String(invoiceCounter).padStart(3, '0')}`,
+      vendor,
+      amount: typeof partial.amount === 'number' ? partial.amount : parseFloat(String(partial.amount ?? '0')) || 0,
+      currency: 'GBP',
+      account_ref: partial.account_ref || `ACC-${Math.floor(1000 + Math.random() * 9000)}`,
+      date: partial.date || new Date().toISOString().slice(0, 10),
+      is_new_vendor: partial.is_new_vendor ?? isNew,
+      prior_payments: partial.prior_payments ?? priorPayments,
+      status: 'pending',
+      flags: [],
+    }
+
+    invoices.push(invoice)
+    created.push(invoice)
+  }
+
+  return created
 }
