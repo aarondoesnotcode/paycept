@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Invoice, AuditEntry, GuardrailConfig, TxEntry } from '@/lib/types'
 
 const DEFAULT_STARTING_BALANCE = 50_000
@@ -61,6 +61,11 @@ export default function Home() {
   const [resetLoading, setResetLoading] = useState(false)
   const [guardrailSaving, setGuardrailSaving] = useState(false)
   const [savedGuardrails, setSavedGuardrails] = useState(false)
+  const [importLoading, setImportLoading] = useState(false)
+  const [importError, setImportError] = useState<string | null>(null)
+  const [importSuccess, setImportSuccess] = useState<number | null>(null)
+  const [dragOver, setDragOver] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   function syncData(data: { invoices?: Invoice[]; auditLog?: AuditEntry[]; guardrails?: GuardrailConfig; balance?: number; startingBalance?: number; transactions?: TxEntry[] }) {
     if (data.invoices) setInvoices(data.invoices)
@@ -155,6 +160,42 @@ export default function Home() {
     }
   }
 
+  async function handleImport(file: File) {
+    setImportLoading(true)
+    setImportError(null)
+    setImportSuccess(null)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch('/api/import', { method: 'POST', body: form })
+      const data = await res.json()
+      if (!res.ok) {
+        setImportError(data.error ?? 'Import failed')
+      } else {
+        syncData(data)
+        setImportSuccess(data.imported)
+        setTimeout(() => setImportSuccess(null), 4000)
+      }
+    } catch {
+      setImportError('Network error — could not import file')
+    } finally {
+      setImportLoading(false)
+    }
+  }
+
+  function onFileInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) handleImport(file)
+    e.target.value = ''
+  }
+
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setDragOver(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file) handleImport(file)
+  }
+
   const counts = {
     pending: invoices.filter(i => i.status === 'pending').length,
     auto_paid: invoices.filter(i => i.status === 'auto_paid').length,
@@ -241,18 +282,103 @@ export default function Home() {
             <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">
               Invoice Queue
             </h2>
-            <span className="text-xs text-zinc-600 font-mono">{invoices.length} invoices</span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-zinc-600 font-mono">{invoices.length} invoices</span>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={importLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:border-zinc-600 transition-colors disabled:opacity-50"
+              >
+                {importLoading ? (
+                  <>
+                    <span className="inline-block w-3 h-3 border border-zinc-500 border-t-zinc-200 rounded-full animate-spin" />
+                    Importing…
+                  </>
+                ) : (
+                  <>
+                    <svg viewBox="0 0 16 16" fill="none" className="w-3.5 h-3.5">
+                      <path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M2 11v1a2 2 0 002 2h8a2 2 0 002-2v-1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                    </svg>
+                    Import file
+                  </>
+                )}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.csv,.txt,.json"
+                className="hidden"
+                onChange={onFileInputChange}
+              />
+            </div>
           </div>
 
-          <div className="space-y-3">
-            {invoices.map(invoice => (
-              <InvoiceCard
-                key={invoice.id}
-                invoice={invoice}
-                onApprove={handleApprove}
-                onReject={handleReject}
-              />
-            ))}
+          {/* Import feedback */}
+          {importError && (
+            <div className="mb-3 px-4 py-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400 flex items-center gap-2">
+              <svg viewBox="0 0 16 16" fill="none" className="w-3.5 h-3.5 shrink-0">
+                <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5"/>
+                <path d="M8 5v3M8 10.5v.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+              {importError}
+              <button onClick={() => setImportError(null)} className="ml-auto text-red-500 hover:text-red-300">✕</button>
+            </div>
+          )}
+          {importSuccess !== null && (
+            <div className="mb-3 px-4 py-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-400 flex items-center gap-2">
+              <svg viewBox="0 0 16 16" fill="none" className="w-3.5 h-3.5 shrink-0">
+                <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5"/>
+                <path d="M5 8l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              {importSuccess} invoice{importSuccess !== 1 ? 's' : ''} imported successfully
+            </div>
+          )}
+
+          {/* Invoice list / empty drop zone */}
+          <div
+            onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={onDrop}
+            className={`transition-all duration-200 rounded-xl ${dragOver ? 'ring-2 ring-zinc-500 ring-offset-2 ring-offset-[#0a0a0a]' : ''}`}
+          >
+            {invoices.length === 0 && !importLoading ? (
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className={`cursor-pointer rounded-xl border-2 border-dashed p-14 text-center transition-colors
+                  ${dragOver ? 'border-zinc-500 bg-zinc-800/40' : 'border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900/40'}`}
+              >
+                <div className="flex flex-col items-center gap-3">
+                  <div className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors ${dragOver ? 'bg-zinc-700' : 'bg-zinc-800'}`}>
+                    <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5 text-zinc-400">
+                      <path d="M12 4v12M8 12l4-4 4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M4 17v1a3 3 0 003 3h10a3 3 0 003-3v-1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-zinc-300">Drop a file or click to import</p>
+                    <p className="text-xs text-zinc-600 mt-1">Supports PDF invoices, CSV spreadsheets, and plain text</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {invoices.map(invoice => (
+                  <InvoiceCard
+                    key={invoice.id}
+                    invoice={invoice}
+                    onApprove={handleApprove}
+                    onReject={handleReject}
+                  />
+                ))}
+                {importLoading && (
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 flex items-center gap-3">
+                    <span className="inline-block w-4 h-4 border border-zinc-600 border-t-zinc-300 rounded-full animate-spin shrink-0" />
+                    <span className="text-xs text-zinc-500">Extracting invoices from file…</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
