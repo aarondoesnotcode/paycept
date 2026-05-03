@@ -6,6 +6,8 @@ An autonomous accounts-payable agent that triages invoices, auto-pays the safe o
 
 Every incoming invoice lands in Paycept's queue before any money moves. A rules-based agent runs guardrail checks — vendor history, threshold limits, duplicate detection, splitting attempts — and enriches each vendor with Specter data. Clean invoices are auto-paid against a simulated treasury and debited in real time. Anything ambiguous is held for human approval with a reason and a confidence score. Nothing leaves the account without either a clean rule set or an explicit human click.
 
+<img width="1449" height="830" alt="image" src="https://github.com/user-attachments/assets/b954864e-7b82-4116-94af-1bcd2b0958e9" />
+
 ## Highlights
 
 - **Real money simulation** — every auto-pay debits an in-memory treasury you can resize on the fly, with a live ledger of every transaction
@@ -35,29 +37,6 @@ Every incoming invoice lands in Paycept's queue before any money moves. A rules-
 - Node.js 20+
 - An Anthropic API key (only needed for PDF/image upload — CSV works without)
 - A Specter API key (provided in `.env.local`)
-
-### Install
-
-```bash
-npm install
-```
-
-### Configure
-
-Edit `.env.local`:
-
-```bash
-SPECTER_API_KEY=your_specter_key
-ANTHROPIC_API_KEY=your_anthropic_key
-```
-
-### Run
-
-```bash
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000).
 
 ## Demo
 
@@ -117,8 +96,3 @@ paycept/
 └── .env.local             # SPECTER_API_KEY, ANTHROPIC_API_KEY
 ```
 
-</details>
-
-## Notes
-
-State is in-memory by design — restart the dev server and the queue, ledger, and guardrails reset. No database, no auth, no real payment rails.
