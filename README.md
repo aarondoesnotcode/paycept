@@ -6,6 +6,8 @@ An autonomous accounts-payable agent that triages invoices, auto-pays the safe o
 
 Every incoming invoice lands in Paycept's queue before any money moves. A rules-based agent runs guardrail checks — vendor history, threshold limits, duplicate detection, splitting attempts — and enriches each vendor with Specter data. Clean invoices are auto-paid against a simulated treasury and debited in real time. Anything ambiguous is held for human approval with a reason and a confidence score. Nothing leaves the account without either a clean rule set or an explicit human click.
 
+Youtube demo - https://www.youtube.com/watch?v=nlVE-e6bWGY
+
 <img width="1449" height="830" alt="image" src="https://github.com/user-attachments/assets/b954864e-7b82-4116-94af-1bcd2b0958e9" />
 
 ## Highlights
